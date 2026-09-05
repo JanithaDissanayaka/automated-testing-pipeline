@@ -32,13 +32,7 @@ pipeline {
             steps {
 
                 echo 'Building application...'
-
-                sh '''
-                    chmod +x mvnw
-
-                    ./mvnw clean package \
-                    -DskipTests
-                '''
+                sh 'mvn clean package'
             }
         }
 
