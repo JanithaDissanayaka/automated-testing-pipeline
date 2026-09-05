@@ -2,6 +2,10 @@ pipeline {
 
     agent any
 
+    tools{
+        maven 'Maven-3.9'
+    }
+
     environment {
 
         APP_NAME = "demo-app"
@@ -32,6 +36,7 @@ pipeline {
             steps {
 
                 echo 'Building application...'
+                sh 'mvn -version'
                 sh 'mvn clean package'
             }
         }
