@@ -49,8 +49,7 @@ pipeline {
                 echo 'Running functional tests...'
 
                 sh '''
-                    ./mvnw test \
-                    -Dtest=ProductFunctionalTest
+                    mvn test -Dtest=ProductFunctionalTest
                 '''
             }
 
