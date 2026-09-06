@@ -2,7 +2,7 @@ pipeline {
 
     agent any
 
-    tools{
+    tools {
         maven 'Maven-3.9'
     }
 
@@ -10,8 +10,7 @@ pipeline {
 
         APP_NAME = "demo-app"
 
-        DOCKER_IMAGE =
-            "demo-app:${BUILD_NUMBER}"
+        DOCKER_IMAGE = "demo-app:${BUILD_NUMBER}"
 
         STAGING_PORT = "8081"
 
@@ -36,8 +35,12 @@ pipeline {
             steps {
 
                 echo 'Building application...'
+
                 sh 'mvn -version'
-                sh 'mvn clean package'
+
+                sh '''
+                    mvn clean package -DskipTests
+                '''
             }
         }
 
@@ -49,7 +52,7 @@ pipeline {
                 echo 'Running functional tests...'
 
                 sh '''
-                    mvn test
+                    mvn test -Dtest=ProductFunctionalTest
                 '''
             }
 
@@ -58,8 +61,7 @@ pipeline {
                 always {
 
                     junit(
-                        testResults:
-                        'target/surefire-reports/*.xml',
+                        testResults: 'target/surefire-reports/*.xml',
                         allowEmptyResults: true
                     )
                 }
@@ -71,20 +73,22 @@ pipeline {
 
             steps {
 
-                echo 'Starting PostgreSQL...'
-
-                sh '''
-                    docker compose up -d postgres
-
-                    sleep 10
-                '''
-
                 echo 'Running integration tests...'
 
                 sh '''
-                    ./mvnw test \
-                    -Dtest=ProductIntegrationTest
+                    mvn test -Dtest=ProductIntegrationTest
                 '''
+            }
+
+            post {
+
+                always {
+
+                    junit(
+                        testResults: 'target/surefire-reports/*.xml',
+                        allowEmptyResults: true
+                    )
+                }
             }
         }
 
@@ -96,9 +100,19 @@ pipeline {
                 echo 'Running regression tests...'
 
                 sh '''
-                    ./mvnw test \
-                    -Dtest=ProductRegressionTest
+                    mvn test -Dtest=ProductRegressionTest
                 '''
+            }
+
+            post {
+
+                always {
+
+                    junit(
+                        testResults: 'target/surefire-reports/*.xml',
+                        allowEmptyResults: true
+                    )
+                }
             }
         }
 
@@ -137,24 +151,25 @@ pipeline {
 
             steps {
 
-                echo 'Deploying to staging...'
+                echo 'Deploying application to staging...'
 
                 sh '''
-                    docker stop ${APP_NAME}-staging || true
-
-                    docker rm ${APP_NAME}-staging || true
+                    docker rm -f ${APP_NAME} || true
 
                     docker run -d \
-                        --name ${APP_NAME}-staging \
+                        --name ${APP_NAME} \
+                        --network ci-network \
                         -p ${STAGING_PORT}:8080 \
-                        -e DB_URL=jdbc:postgresql://host.docker.internal:5432/demo \
-                        -e DB_USERNAME=postgres \
-                        -e DB_PASSWORD=postgres \
+                        -e SPRING_PROFILES_ACTIVE=docker \
                         ${DOCKER_IMAGE}
                 '''
 
                 sh '''
+                    echo "Waiting for application to start..."
+
                     sleep 15
+
+                    docker ps
                 '''
             }
         }
@@ -167,9 +182,21 @@ pipeline {
                 echo 'Running acceptance tests...'
 
                 sh '''
-                    ./mvnw test \
-                    -Dtest=ProductAcceptanceTest
+                    mvn test \
+                    -Dtest=ProductAcceptanceTest \
+                    -DbaseUrl=http://${APP_NAME}:8080
                 '''
+            }
+
+            post {
+
+                always {
+
+                    junit(
+                        testResults: 'target/surefire-reports/*.xml',
+                        allowEmptyResults: true
+                    )
+                }
             }
         }
 
@@ -192,8 +219,7 @@ pipeline {
             steps {
 
                 input(
-                    message:
-                    'All tests passed. Deploy to production?',
+                    message: 'All tests passed. Deploy to production?',
                     ok: 'Deploy'
                 )
             }
@@ -204,19 +230,16 @@ pipeline {
 
             steps {
 
-                echo 'Deploying to production...'
+                echo 'Deploying application to production...'
 
                 sh '''
-                    docker stop ${APP_NAME}-production || true
-
-                    docker rm ${APP_NAME}-production || true
+                    docker rm -f ${APP_NAME}-production || true
 
                     docker run -d \
                         --name ${APP_NAME}-production \
+                        --network ci-network \
                         -p ${PROD_PORT}:8080 \
-                        -e DB_URL=jdbc:postgresql://host.docker.internal:5432/demo \
-                        -e DB_USERNAME=postgres \
-                        -e DB_PASSWORD=postgres \
+                        -e SPRING_PROFILES_ACTIVE=docker \
                         ${DOCKER_IMAGE}
                 '''
             }
@@ -230,7 +253,7 @@ pipeline {
 
             echo '''
             ==========================================
-            CI/CD PIPELINE SUCCESSFUL
+                 CI/CD PIPELINE SUCCESSFUL
             ==========================================
             '''
         }
@@ -239,7 +262,7 @@ pipeline {
 
             echo '''
             ==========================================
-            CI/CD PIPELINE FAILED
+                 CI/CD PIPELINE FAILED
             ==========================================
             '''
         }
