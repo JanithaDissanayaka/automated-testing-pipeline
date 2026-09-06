@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import io.restassured.RestAssured;
 
 import static io.restassured.RestAssured.*;
-import static org.hamcrest.Matchers.*;
 
 class ProductAcceptanceTest {
 
@@ -13,7 +12,7 @@ class ProductAcceptanceTest {
     void productApiShouldBeAvailable() {
 
         RestAssured.baseURI =
-                "http://demo-app:8081";
+                "http://localhost:8081";
 
         given()
         .when()
