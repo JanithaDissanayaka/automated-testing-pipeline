@@ -13,7 +13,7 @@ class ProductAcceptanceTest {
     void productApiShouldBeAvailable() {
 
         RestAssured.baseURI =
-                "http://localhost:8081";
+                "http://demo-app:8080";
 
         given()
         .when()
