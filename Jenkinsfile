@@ -40,7 +40,6 @@ pipeline {
             }
         }
 
-
         stage('Build') {
             steps {
                 echo 'Building application...'
@@ -52,7 +51,6 @@ pipeline {
                 '''
             }
         }
-
 
         stage('Functional Testing') {
             steps {
@@ -79,7 +77,6 @@ pipeline {
             }
         }
 
-
         stage('Integration Testing') {
             steps {
                 echo 'Running integration tests...'
@@ -104,7 +101,6 @@ pipeline {
                 }
             }
         }
-
 
         stage('Regression Testing') {
             steps {
@@ -131,7 +127,6 @@ pipeline {
             }
         }
 
-
         stage('Security Testing') {
             steps {
                 echo 'Running Trivy security scan...'
@@ -145,7 +140,6 @@ pipeline {
             }
         }
 
-
         stage('Docker Build') {
             steps {
                 echo 'Building Docker image...'
@@ -156,7 +150,6 @@ pipeline {
                 '''
             }
         }
-
 
         stage('Deploy to Staging') {
             steps {
@@ -202,7 +195,6 @@ pipeline {
             }
         }
 
-
         stage('Acceptance Testing') {
             steps {
                 echo 'Running acceptance tests...'
@@ -224,7 +216,6 @@ pipeline {
             }
         }
 
-
         stage('Load Testing') {
             steps {
                 echo 'Running k6 load test...'
@@ -235,7 +226,6 @@ pipeline {
             }
         }
 
-
         stage('Approve Production') {
             steps {
                 input(
@@ -245,26 +235,28 @@ pipeline {
             }
         }
 
-
         stage('Deploy to Production') {
             steps {
+                echo 'Deploying application to production...'
+
                 sh '''
                     echo "Stopping previous production container..."
-                    docker rm -f demo-app-production 2>/dev/null || true
+
+                    docker rm -f ${APP_NAME}-production 2>/dev/null || true
 
                     echo "Starting production application..."
 
                     docker run -d \
-                    --name demo-app-production \
-                    -p 8080:8080 \
-                    -e SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/appdb \
-                    -e SPRING_DATASOURCE_USERNAME=appuser \
-                    -e SPRING_DATASOURCE_PASSWORD=app123 \
-                    -e SPRING_JPA_HIBERNATE_DDL_AUTO=update \
-                    demo-app:399
+                        --name ${APP_NAME}-production \
+                        --network ${DOCKER_NETWORK} \
+                        -p ${PROD_PORT}:${CONTAINER_PORT} \
+                        -e SPRING_DATASOURCE_URL=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME} \
+                        -e SPRING_DATASOURCE_USERNAME=${DB_USER} \
+                        -e SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD} \
+                        -e SPRING_JPA_HIBERNATE_DDL_AUTO=update \
+                        ${DOCKER_IMAGE}
                 '''
             }
-        }
 
             post {
                 always {
@@ -273,7 +265,7 @@ pipeline {
 
                         for i in $(seq 1 30); do
 
-                            if curl -sf http://localhost:${PROD_PORT}/api/products > /dev/null; then
+                            if curl -sf http://${APP_NAME}-production:${CONTAINER_PORT}/api/products > /dev/null; then
                                 echo "Production application is ready."
                                 exit 0
                             fi
@@ -291,7 +283,6 @@ pipeline {
             }
         }
     }
-
 
     post {
 
@@ -315,3 +306,4 @@ pipeline {
             echo 'Pipeline execution completed.'
         }
     }
+}
