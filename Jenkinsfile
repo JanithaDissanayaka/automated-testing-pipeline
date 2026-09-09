@@ -14,35 +14,36 @@ pipeline {
 
         DOCKER_NETWORK = "ci-network"
 
+        CONTAINER_PORT = "8081"
+
         STAGING_PORT = "8081"
 
         PROD_PORT = "8080"
 
-        CONTAINER_PORT = "8081"
+        DB_HOST = "postgres-db"
+
+        DB_PORT = "5432"
+
+        DB_NAME = "automated_testing"
+
+        DB_USER = "appuser"
+
+        DB_PASSWORD = "app123"
     }
 
     stages {
 
         stage('Checkout') {
-
             steps {
-
-                echo '=========================================='
                 echo 'Checking out source code...'
-                echo '=========================================='
-
                 checkout scm
             }
         }
 
 
         stage('Build') {
-
             steps {
-
-                echo '=========================================='
                 echo 'Building application...'
-                echo '=========================================='
 
                 sh 'mvn -version'
 
@@ -54,22 +55,22 @@ pipeline {
 
 
         stage('Functional Testing') {
-
             steps {
-
-                echo '=========================================='
                 echo 'Running functional tests...'
-                echo '=========================================='
 
                 sh '''
-                    mvn test -Dtest=ProductFunctionalTest
+                    mvn test \
+                    -Dtest=ProductFunctionalTest \
+                    -Dspring.datasource.url=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME} \
+                    -Dspring.datasource.username=${DB_USER} \
+                    -Dspring.datasource.password=${DB_PASSWORD} \
+                    -Dspring.jpa.hibernate.ddl-auto=update \
+                    -Dspring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
                 '''
             }
 
             post {
-
                 always {
-
                     junit(
                         testResults: 'target/surefire-reports/*.xml',
                         allowEmptyResults: true
@@ -80,22 +81,22 @@ pipeline {
 
 
         stage('Integration Testing') {
-
             steps {
-
-                echo '=========================================='
                 echo 'Running integration tests...'
-                echo '=========================================='
 
                 sh '''
-                    mvn test -Dtest=ProductIntegrationTest
+                    mvn test \
+                    -Pintegration-test \
+                    -Dspring.datasource.url=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME} \
+                    -Dspring.datasource.username=${DB_USER} \
+                    -Dspring.datasource.password=${DB_PASSWORD} \
+                    -Dspring.jpa.hibernate.ddl-auto=update \
+                    -Dspring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
                 '''
             }
 
             post {
-
                 always {
-
                     junit(
                         testResults: 'target/surefire-reports/*.xml',
                         allowEmptyResults: true
@@ -106,22 +107,22 @@ pipeline {
 
 
         stage('Regression Testing') {
-
             steps {
-
-                echo '=========================================='
                 echo 'Running regression tests...'
-                echo '=========================================='
 
                 sh '''
-                    mvn test -Dtest=ProductRegressionTest
+                    mvn test \
+                    -Pregression-test \
+                    -Dspring.datasource.url=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME} \
+                    -Dspring.datasource.username=${DB_USER} \
+                    -Dspring.datasource.password=${DB_PASSWORD} \
+                    -Dspring.jpa.hibernate.ddl-auto=update \
+                    -Dspring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
                 '''
             }
 
             post {
-
                 always {
-
                     junit(
                         testResults: 'target/surefire-reports/*.xml',
                         allowEmptyResults: true
@@ -132,51 +133,34 @@ pipeline {
 
 
         stage('Security Testing') {
-
             steps {
-
-                echo '=========================================='
                 echo 'Running Trivy security scan...'
-                echo '=========================================='
 
                 sh '''
                     trivy fs \
-                        --severity HIGH,CRITICAL \
-                        --exit-code 1 \
-                        .
+                    --severity HIGH,CRITICAL \
+                    --exit-code 1 \
+                    .
                 '''
             }
         }
 
 
         stage('Docker Build') {
-
             steps {
-
-                echo '=========================================='
                 echo 'Building Docker image...'
-                echo '=========================================='
 
                 sh '''
                     docker build \
-                        -t ${DOCKER_IMAGE} \
-                        .
-                '''
-
-                sh '''
-                    docker images ${DOCKER_IMAGE}
+                    -t ${DOCKER_IMAGE} .
                 '''
             }
         }
 
 
         stage('Deploy to Staging') {
-
             steps {
-
-                echo '=========================================='
                 echo 'Deploying application to staging...'
-                echo '=========================================='
 
                 sh '''
                     docker rm -f ${APP_NAME} || true
@@ -185,60 +169,53 @@ pipeline {
                         --name ${APP_NAME} \
                         --network ${DOCKER_NETWORK} \
                         -p ${STAGING_PORT}:${CONTAINER_PORT} \
-                        -e SPRING_PROFILES_ACTIVE=docker \
+                        -e SPRING_DATASOURCE_URL=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME} \
+                        -e SPRING_DATASOURCE_USERNAME=${DB_USER} \
+                        -e SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD} \
+                        -e SPRING_JPA_HIBERNATE_DDL_AUTO=update \
                         ${DOCKER_IMAGE}
                 '''
+            }
 
-                sh '''
-                    echo "Waiting for application to start..."
+            post {
+                always {
+                    sh '''
+                        echo "Waiting for staging application..."
 
-                    for i in {1..30}; do
+                        for i in $(seq 1 30); do
 
-                        if curl -sf http://localhost:${STAGING_PORT}/api/products > /dev/null; then
-                            echo "Application is ready!"
-                            exit 0
-                        fi
+                            if curl -sf http://localhost:${STAGING_PORT}/api/products > /dev/null; then
+                                echo "Staging application is ready."
+                                exit 0
+                            fi
 
-                        echo "Application not ready yet... attempt $i/30"
+                            echo "Waiting... attempt $i"
+                            sleep 2
 
-                        sleep 2
-                    done
+                        done
 
-                    echo "Application failed to start."
-
-                    echo "========== Container Status =========="
-
-                    docker ps -a
-
-                    echo "========== Application Logs =========="
-
-                    docker logs ${APP_NAME}
-
-                    exit 1
-                '''
+                        echo "Staging application failed to start."
+                        docker logs ${APP_NAME}
+                        exit 1
+                    '''
+                }
             }
         }
 
 
         stage('Acceptance Testing') {
-
             steps {
-
-                echo '=========================================='
                 echo 'Running acceptance tests...'
-                echo '=========================================='
 
                 sh '''
                     mvn test \
-                        -Dtest=ProductAcceptanceTest \
-                        -DbaseUrl=http://${APP_NAME}:${CONTAINER_PORT}
+                    -Pacceptance-test \
+                    -DbaseUrl=http://${APP_NAME}:${CONTAINER_PORT}
                 '''
             }
 
             post {
-
                 always {
-
                     junit(
                         testResults: 'target/surefire-reports/*.xml',
                         allowEmptyResults: true
@@ -249,12 +226,8 @@ pipeline {
 
 
         stage('Load Testing') {
-
             steps {
-
-                echo '=========================================='
                 echo 'Running k6 load test...'
-                echo '=========================================='
 
                 sh '''
                     k6 run tests/load-test.js
@@ -264,13 +237,7 @@ pipeline {
 
 
         stage('Approve Production') {
-
             steps {
-
-                echo '=========================================='
-                echo 'Production deployment approval'
-                echo '=========================================='
-
                 input(
                     message: 'All tests passed. Deploy to production?',
                     ok: 'Deploy'
@@ -280,12 +247,8 @@ pipeline {
 
 
         stage('Deploy to Production') {
-
             steps {
-
-                echo '=========================================='
                 echo 'Deploying application to production...'
-                echo '=========================================='
 
                 sh '''
                     docker rm -f ${APP_NAME}-production || true
@@ -294,37 +257,36 @@ pipeline {
                         --name ${APP_NAME}-production \
                         --network ${DOCKER_NETWORK} \
                         -p ${PROD_PORT}:${CONTAINER_PORT} \
-                        -e SPRING_PROFILES_ACTIVE=docker \
+                        -e SPRING_DATASOURCE_URL=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME} \
+                        -e SPRING_DATASOURCE_USERNAME=${DB_USER} \
+                        -e SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD} \
+                        -e SPRING_JPA_HIBERNATE_DDL_AUTO=update \
                         ${DOCKER_IMAGE}
                 '''
+            }
 
-                sh '''
-                    echo "Waiting for production application..."
+            post {
+                always {
+                    sh '''
+                        echo "Waiting for production application..."
 
-                    for i in {1..30}; do
+                        for i in $(seq 1 30); do
 
-                        if curl -sf http://localhost:${PROD_PORT}/api/products > /dev/null; then
-                            echo "Production application is ready!"
-                            exit 0
-                        fi
+                            if curl -sf http://localhost:${PROD_PORT}/api/products > /dev/null; then
+                                echo "Production application is ready."
+                                exit 0
+                            fi
 
-                        echo "Production not ready yet... attempt $i/30"
+                            echo "Waiting... attempt $i"
+                            sleep 2
 
-                        sleep 2
-                    done
+                        done
 
-                    echo "Production application failed to start."
-
-                    echo "========== Container Status =========="
-
-                    docker ps -a
-
-                    echo "========== Production Logs =========="
-
-                    docker logs ${APP_NAME}-production
-
-                    exit 1
-                '''
+                        echo "Production application failed to start."
+                        docker logs ${APP_NAME}-production
+                        exit 1
+                    '''
+                }
             }
         }
     }
@@ -333,41 +295,22 @@ pipeline {
     post {
 
         success {
-
             echo '''
             ==========================================
                  CI/CD PIPELINE SUCCESSFUL
             ==========================================
-
-                 Application: demo-app
-
-                 Staging:    http://localhost:8081
-                 Production: http://localhost:8080
-
-                 Database:   PostgreSQL
-                 Network:    ci-network
-
-            ==========================================
             '''
         }
 
-
         failure {
-
             echo '''
             ==========================================
                  CI/CD PIPELINE FAILED
             ==========================================
-
-                 Check the failed stage above.
-
-            ==========================================
             '''
         }
 
-
         always {
-
             echo 'Pipeline execution completed.'
         }
     }
