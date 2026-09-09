@@ -12,9 +12,13 @@ pipeline {
 
         DOCKER_IMAGE = "demo-app:${BUILD_NUMBER}"
 
+        DOCKER_NETWORK = "ci-network"
+
         STAGING_PORT = "8081"
 
         PROD_PORT = "8080"
+
+        CONTAINER_PORT = "8081"
     }
 
     stages {
@@ -23,7 +27,9 @@ pipeline {
 
             steps {
 
+                echo '=========================================='
                 echo 'Checking out source code...'
+                echo '=========================================='
 
                 checkout scm
             }
@@ -34,7 +40,9 @@ pipeline {
 
             steps {
 
+                echo '=========================================='
                 echo 'Building application...'
+                echo '=========================================='
 
                 sh 'mvn -version'
 
@@ -49,7 +57,9 @@ pipeline {
 
             steps {
 
+                echo '=========================================='
                 echo 'Running functional tests...'
+                echo '=========================================='
 
                 sh '''
                     mvn test -Dtest=ProductFunctionalTest
@@ -73,7 +83,9 @@ pipeline {
 
             steps {
 
+                echo '=========================================='
                 echo 'Running integration tests...'
+                echo '=========================================='
 
                 sh '''
                     mvn test -Dtest=ProductIntegrationTest
@@ -97,7 +109,9 @@ pipeline {
 
             steps {
 
+                echo '=========================================='
                 echo 'Running regression tests...'
+                echo '=========================================='
 
                 sh '''
                     mvn test -Dtest=ProductRegressionTest
@@ -121,13 +135,15 @@ pipeline {
 
             steps {
 
+                echo '=========================================='
                 echo 'Running Trivy security scan...'
+                echo '=========================================='
 
                 sh '''
                     trivy fs \
-                    --severity HIGH,CRITICAL \
-                    --exit-code 1 \
-                    .
+                        --severity HIGH,CRITICAL \
+                        --exit-code 1 \
+                        .
                 '''
             }
         }
@@ -137,11 +153,18 @@ pipeline {
 
             steps {
 
+                echo '=========================================='
                 echo 'Building Docker image...'
+                echo '=========================================='
 
                 sh '''
                     docker build \
-                    -t ${DOCKER_IMAGE} .
+                        -t ${DOCKER_IMAGE} \
+                        .
+                '''
+
+                sh '''
+                    docker images ${DOCKER_IMAGE}
                 '''
             }
         }
@@ -151,15 +174,17 @@ pipeline {
 
             steps {
 
+                echo '=========================================='
                 echo 'Deploying application to staging...'
+                echo '=========================================='
 
                 sh '''
                     docker rm -f ${APP_NAME} || true
 
                     docker run -d \
                         --name ${APP_NAME} \
-                        --network ci-network \
-                        -p ${STAGING_PORT}:8080 \
+                        --network ${DOCKER_NETWORK} \
+                        -p ${STAGING_PORT}:${CONTAINER_PORT} \
                         -e SPRING_PROFILES_ACTIVE=docker \
                         ${DOCKER_IMAGE}
                 '''
@@ -167,9 +192,29 @@ pipeline {
                 sh '''
                     echo "Waiting for application to start..."
 
-                    sleep 15
+                    for i in {1..30}; do
 
-                    docker ps
+                        if curl -sf http://localhost:${STAGING_PORT}/api/products > /dev/null; then
+                            echo "Application is ready!"
+                            exit 0
+                        fi
+
+                        echo "Application not ready yet... attempt $i/30"
+
+                        sleep 2
+                    done
+
+                    echo "Application failed to start."
+
+                    echo "========== Container Status =========="
+
+                    docker ps -a
+
+                    echo "========== Application Logs =========="
+
+                    docker logs ${APP_NAME}
+
+                    exit 1
                 '''
             }
         }
@@ -179,12 +224,14 @@ pipeline {
 
             steps {
 
+                echo '=========================================='
                 echo 'Running acceptance tests...'
+                echo '=========================================='
 
                 sh '''
                     mvn test \
-                    -Dtest=ProductAcceptanceTest \
-                    -DbaseUrl=http://${APP_NAME}:8080
+                        -Dtest=ProductAcceptanceTest \
+                        -DbaseUrl=http://${APP_NAME}:${CONTAINER_PORT}
                 '''
             }
 
@@ -205,7 +252,9 @@ pipeline {
 
             steps {
 
+                echo '=========================================='
                 echo 'Running k6 load test...'
+                echo '=========================================='
 
                 sh '''
                     k6 run tests/load-test.js
@@ -217,6 +266,10 @@ pipeline {
         stage('Approve Production') {
 
             steps {
+
+                echo '=========================================='
+                echo 'Production deployment approval'
+                echo '=========================================='
 
                 input(
                     message: 'All tests passed. Deploy to production?',
@@ -230,17 +283,47 @@ pipeline {
 
             steps {
 
+                echo '=========================================='
                 echo 'Deploying application to production...'
+                echo '=========================================='
 
                 sh '''
                     docker rm -f ${APP_NAME}-production || true
 
                     docker run -d \
                         --name ${APP_NAME}-production \
-                        --network ci-network \
-                        -p ${PROD_PORT}:8080 \
+                        --network ${DOCKER_NETWORK} \
+                        -p ${PROD_PORT}:${CONTAINER_PORT} \
                         -e SPRING_PROFILES_ACTIVE=docker \
                         ${DOCKER_IMAGE}
+                '''
+
+                sh '''
+                    echo "Waiting for production application..."
+
+                    for i in {1..30}; do
+
+                        if curl -sf http://localhost:${PROD_PORT}/api/products > /dev/null; then
+                            echo "Production application is ready!"
+                            exit 0
+                        fi
+
+                        echo "Production not ready yet... attempt $i/30"
+
+                        sleep 2
+                    done
+
+                    echo "Production application failed to start."
+
+                    echo "========== Container Status =========="
+
+                    docker ps -a
+
+                    echo "========== Production Logs =========="
+
+                    docker logs ${APP_NAME}-production
+
+                    exit 1
                 '''
             }
         }
@@ -255,8 +338,19 @@ pipeline {
             ==========================================
                  CI/CD PIPELINE SUCCESSFUL
             ==========================================
+
+                 Application: demo-app
+
+                 Staging:    http://localhost:8081
+                 Production: http://localhost:8080
+
+                 Database:   PostgreSQL
+                 Network:    ci-network
+
+            ==========================================
             '''
         }
+
 
         failure {
 
@@ -264,8 +358,13 @@ pipeline {
             ==========================================
                  CI/CD PIPELINE FAILED
             ==========================================
+
+                 Check the failed stage above.
+
+            ==========================================
             '''
         }
+
 
         always {
 
