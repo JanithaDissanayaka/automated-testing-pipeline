@@ -248,22 +248,23 @@ pipeline {
 
         stage('Deploy to Production') {
             steps {
-                echo 'Deploying application to production...'
-
                 sh '''
-                    docker rm -f ${APP_NAME}-production || true
+                    echo "Stopping previous production container..."
+                    docker rm -f demo-app-production 2>/dev/null || true
+
+                    echo "Starting production application..."
 
                     docker run -d \
-                        --name ${APP_NAME}-production \
-                        --network ${DOCKER_NETWORK} \
-                        -p ${PROD_PORT}:${CONTAINER_PORT} \
-                        -e SPRING_DATASOURCE_URL=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME} \
-                        -e SPRING_DATASOURCE_USERNAME=${DB_USER} \
-                        -e SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD} \
-                        -e SPRING_JPA_HIBERNATE_DDL_AUTO=update \
-                        ${DOCKER_IMAGE}
+                    --name demo-app-production \
+                    -p 8080:8080 \
+                    -e SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/appdb \
+                    -e SPRING_DATASOURCE_USERNAME=appuser \
+                    -e SPRING_DATASOURCE_PASSWORD=app123 \
+                    -e SPRING_JPA_HIBERNATE_DDL_AUTO=update \
+                    demo-app:399
                 '''
             }
+        }
 
             post {
                 always {
