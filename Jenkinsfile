@@ -184,7 +184,7 @@ pipeline {
 
                         for i in $(seq 1 30); do
 
-                            if curl -sf http://localhost:${STAGING_PORT}/api/products > /dev/null; then
+                            if curl -sf http://${APP_NAME}:${CONTAINER_PORT}/api/products > /dev/null; then
                                 echo "Staging application is ready."
                                 exit 0
                             fi
