@@ -11,8 +11,10 @@ class ProductAcceptanceTest {
     @Test
     void productApiShouldBeAvailable() {
 
-        RestAssured.baseURI =
-                "http://localhost:8081";
+        String baseUrl =
+                System.getProperty("baseUrl", "http://localhost:8081");
+
+        RestAssured.baseURI = baseUrl;
 
         given()
         .when()
