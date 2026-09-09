@@ -1,158 +1,144 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
-         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+      https://maven.apache.org/xsd/maven-4.0.0.xsd">
 
-    <modelVersion>4.0.0</modelVersion>
+<modelVersion>4.0.0</modelVersion>
 
-    <parent>
+<parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.5.15</version>
+    <relativePath/>
+</parent>
+
+<groupId>com.example</groupId>
+<artifactId>demo</artifactId>
+<version>1.0.0</version>
+
+<name>demo</name>
+<description>CI/CD Testing Demo Application</description>
+
+<properties>
+    <java.version>21</java.version>
+    <postgresql.version>42.7.12</postgresql.version>
+    <tomcat.version>11.0.25</tomcat.version>
+</properties>
+
+<dependencies>
+
+    <dependency>
         <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.14</version>
-        <relativePath/>
-    </parent>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
 
-    <groupId>com.example</groupId>
-    <artifactId>demo</artifactId>
-    <version>1.0.0</version>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
 
-    <name>demo</name>
-    <description>CI/CD Testing Demo Application</description>
+    <dependency>
+        <groupId>org.postgresql</groupId>
+        <artifactId>postgresql</artifactId>
+        <scope>runtime</scope>
+    </dependency>
 
-    <properties>
-        <java.version>21</java.version>
-         <postgresql.version>42.7.12</postgresql.version>
-    </properties>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
 
-    <dependencies>
+    <dependency>
+        <groupId>io.rest-assured</groupId>
+        <artifactId>rest-assured</artifactId>
+        <version>5.5.6</version>
+        <scope>test</scope>
+    </dependency>
 
-        <!-- Spring Boot Web -->
-        <dependency>
+</dependencies>
+
+<build>
+    <plugins>
+
+        <plugin>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
+            <artifactId>spring-boot-maven-plugin</artifactId>
+        </plugin>
 
-        <!-- Spring Data JPA -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
-        </dependency>
+    </plugins>
+</build>
 
-        <!-- PostgreSQL -->
-        <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-            <scope>runtime</scope>
-        </dependency>
+<profiles>
 
-        <!-- Testing -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
+    <profile>
+        <id>integration-test</id>
 
-        <!-- REST Assured -->
-        <dependency>
-            <groupId>io.rest-assured</groupId>
-            <artifactId>rest-assured</artifactId>
-            <version>5.5.6</version>
-            <scope>test</scope>
-        </dependency>
+        <build>
+            <plugins>
 
-    </dependencies>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
 
-    <build>
+                    <configuration>
+                        <includes>
+                            <include>**/*IntegrationTest.java</include>
+                        </includes>
+                    </configuration>
 
-        <plugins>
+                </plugin>
 
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
+            </plugins>
+        </build>
+    </profile>
 
-        </plugins>
+    <profile>
+        <id>regression-test</id>
 
-    </build>
+        <build>
+            <plugins>
 
-    <profiles>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
 
-        <!-- Integration Testing -->
-        <profile>
-            <id>integration-test</id>
+                    <configuration>
+                        <includes>
+                            <include>**/*RegressionTest.java</include>
+                        </includes>
+                    </configuration>
 
-            <build>
-                <plugins>
+                </plugin>
 
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-surefire-plugin</artifactId>
+            </plugins>
+        </build>
+    </profile>
 
-                        <configuration>
-                            <includes>
-                                <include>**/*IntegrationTest.java</include>
-                            </includes>
-                        </configuration>
+    <profile>
+        <id>acceptance-test</id>
 
-                    </plugin>
+        <build>
+            <plugins>
 
-                </plugins>
-            </build>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
 
-        </profile>
+                    <configuration>
+                        <includes>
+                            <include>**/*AcceptanceTest.java</include>
+                        </includes>
+                    </configuration>
 
+                </plugin>
 
-        <!-- Regression Testing -->
-        <profile>
-            <id>regression-test</id>
+            </plugins>
+        </build>
+    </profile>
 
-            <build>
-                <plugins>
-
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-surefire-plugin</artifactId>
-
-                        <configuration>
-                            <includes>
-                                <include>**/*RegressionTest.java</include>
-                            </includes>
-                        </configuration>
-
-                    </plugin>
-
-                </plugins>
-            </build>
-
-        </profile>
-
-
-        <!-- Acceptance Testing -->
-        <profile>
-            <id>acceptance-test</id>
-
-            <build>
-                <plugins>
-
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-surefire-plugin</artifactId>
-
-                        <configuration>
-                            <includes>
-                                <include>**/*AcceptanceTest.java</include>
-                            </includes>
-                        </configuration>
-
-                    </plugin>
-
-                </plugins>
-            </build>
-
-        </profile>
-
-    </profiles>
+</profiles>
 
 </project>
